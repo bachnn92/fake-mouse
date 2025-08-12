@@ -5,6 +5,7 @@ import math
 from pynput import mouse
 
 # Wait for 2 seconds before starting
+start_time = time.time()
 print("Automove after 3 seconds. Double click to exit.")
 time.sleep(3)
 
@@ -31,20 +32,19 @@ def on_click(x, y, button, pressed):
             double_click_detected = True
         last_click_time = current_time
 # Add timestamp and elapsed time tracking
-def print_timestamp_and_elapsed():
+def get_elapsed():
     elapsed = time.time() - start_time
-    print(f"Elapsed: {elapsed:.2f} seconds")
+    return elapsed
 
 # Start mouse listener in the background
 last_click_time = 0
 listener = mouse.Listener(on_click=on_click)
 listener.start()
-start_time = time.time()
+
 # Move randomly within the radius
 while True:
     if double_click_detected:
-        print("Double click detected.")
-        print_timestamp_and_elapsed()
+        print("Double click detected. Exiting...")
         time.sleep(3)
         break
     angle = random.uniform(0, 2 * math.pi)
@@ -52,7 +52,8 @@ while True:
     x = int(center_x + r * math.cos(angle))
     y = int(center_y + r * math.sin(angle))
     delay = random.uniform(delay_range[0], delay_range[1])
-    print(f"Move to ({x}, {y}), delay: {delay:.2f} seconds")
+    elapsed = get_elapsed()
+    print(f"Move to ({x}, {y}), delay: {delay:.2f} seconds, Elapsed: {elapsed:.2f} seconds")
     pyautogui.moveTo(x, y, duration=0.5)
     time.sleep(delay)
 
