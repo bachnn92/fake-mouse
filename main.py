@@ -1,7 +1,7 @@
-import pyautogui
 import time
 import random
 import math
+import pyautogui
 from pynput import mouse
 
 # Wait for 2 seconds before starting
