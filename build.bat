@@ -3,4 +3,4 @@ rmdir /s /q build
 rmdir /s /q dist
 del main.spec
 
-pyinstaller --onefile main.py
+pyinstaller --onefile --name fake-mouse main.py
