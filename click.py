@@ -1,28 +1,25 @@
 import json
 import time
-import random
 import pyautogui
 import tkinter as tk
 import threading
 import argparse
-import keyboard  # pip install keyboard
+import random
+from pynput import keyboard   # global key listener
 
 ZONE_FILE = "zone.json"
 
 # Config
-CLICK_MIN = 0.1   # min delay between clicks (sec)
-CLICK_MAX = 1.0   # max delay between clicks (sec)
-KEY_INTERVAL = 5  # press Right Arrow every 5 sec
+STEP = 50         # pixels between clicks vertically
+CLICK_DELAY = 0.02 # delay between clicks (sec)
 
 
 class ZoneWorker:
     def __init__(self, visual=False):
-        # Load zone from JSON
         with open(ZONE_FILE, "r") as f:
             data = json.load(f)
-        zone = data["zone"]  # [x1, y1, x2, y2]
+        zone = data["zone"]
 
-        # Normalize zone
         self.left = int(min(zone[0], zone[2]))
         self.top = int(min(zone[1], zone[3]))
         self.right = int(max(zone[0], zone[2]))
@@ -34,7 +31,6 @@ class ZoneWorker:
         self.visual = visual
 
         if self.visual:
-            # Tkinter overlay
             self.root = tk.Tk()
             self.root.attributes("-fullscreen", True)
             self.root.attributes("-alpha", 0.3)
@@ -43,20 +39,23 @@ class ZoneWorker:
 
             self.canvas = tk.Canvas(self.root, bg="gray", highlightthickness=0)
             self.canvas.pack(fill=tk.BOTH, expand=True)
-
-            # Draw zone rectangle
             self.canvas.create_rectangle(self.left, self.top, self.right, self.bottom,
                                          outline="red", width=2)
-
-            self.root.bind("<Escape>", self.on_escape)  # ESC to exit in visual mode
+            self.root.bind("<Escape>", self.on_escape)
         else:
-            self.root = None  # no GUI
+            self.root = None
 
-        # Global ESC listener (always works)
-        keyboard.add_hotkey("esc", self.on_escape)
-
-        # Worker thread
+        # Start worker thread
         threading.Thread(target=self.worker, daemon=True).start()
+
+        # Start global ESC listener
+        listener = keyboard.Listener(on_press=self.on_key)
+        listener.daemon = True
+        listener.start()
+
+    def on_key(self, key):
+        if key == keyboard.Key.esc:  # ESC pressed
+            self.on_escape()
 
     def on_escape(self, event=None):
         if not self.exit_flag:
@@ -66,22 +65,32 @@ class ZoneWorker:
                 self.root.destroy()
 
     def worker(self):
-        last_key_time = time.time()
+        start_time = time.time()
+        enter_pressed = False
         while not self.exit_flag:
-            # Random click position inside zone
-            x = random.randint(self.left, self.right)
-            y = random.randint(self.top, self.bottom)
-            pyautogui.click(x, y)
-            print(f"Clicked at ({x}, {y})")
+            # From top to bottom
+            for y in range(self.top, self.bottom + 1, STEP):
+                if self.exit_flag:
+                    break
+                # Randomize X within the zone for each Y
+                x = random.randint(self.left, self.right)
+                pyautogui.click(x, y)
+                print(f"Clicked at ({x}, {y})")
+                time.sleep(CLICK_DELAY)
 
-            # Random delay
-            time.sleep(random.uniform(CLICK_MIN, CLICK_MAX))
+            if self.exit_flag:
+                break
 
-            # Press right arrow every KEY_INTERVAL sec
-            if time.time() - last_key_time >= KEY_INTERVAL:
-                pyautogui.press("right")
-                print("Pressed Right Arrow")
-                last_key_time = time.time()
+            # At bottom → press right arrow
+            pyautogui.press("right")
+            print("Pressed Right Arrow")
+            time.sleep(0.5)
+
+            # Press Enter every 2 minutes
+            if (time.time() - start_time) >= 180:
+                pyautogui.press("enter")
+                print("Pressed Enter (every 2 minutes)")
+                start_time = time.time()
 
     def run(self):
         if self.visual and self.root:

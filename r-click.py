@@ -1,30 +1,28 @@
 import json
 import time
+import random
 import pyautogui
 import tkinter as tk
 import threading
 import argparse
-import sys
-
-# Windows-only keyboard check
-try:
-    import msvcrt
-except ImportError:
-    msvcrt = None
+import keyboard  # pip install keyboard
 
 ZONE_FILE = "zone.json"
 
 # Config
-STEP = 50        # pixels between clicks vertically
-CLICK_DELAY = 0.2  # delay between clicks (sec)
+CLICK_MIN = 0.1   # min delay between clicks (sec)
+CLICK_MAX = 1.0   # max delay between clicks (sec)
+KEY_INTERVAL = 5  # press Right Arrow every 5 sec
 
 
 class ZoneWorker:
     def __init__(self, visual=False):
+        # Load zone from JSON
         with open(ZONE_FILE, "r") as f:
             data = json.load(f)
-        zone = data["zone"]
+        zone = data["zone"]  # [x1, y1, x2, y2]
 
+        # Normalize zone
         self.left = int(min(zone[0], zone[2]))
         self.top = int(min(zone[1], zone[3]))
         self.right = int(max(zone[0], zone[2]))
@@ -36,6 +34,7 @@ class ZoneWorker:
         self.visual = visual
 
         if self.visual:
+            # Tkinter overlay
             self.root = tk.Tk()
             self.root.attributes("-fullscreen", True)
             self.root.attributes("-alpha", 0.3)
@@ -44,12 +43,19 @@ class ZoneWorker:
 
             self.canvas = tk.Canvas(self.root, bg="gray", highlightthickness=0)
             self.canvas.pack(fill=tk.BOTH, expand=True)
+
+            # Draw zone rectangle
             self.canvas.create_rectangle(self.left, self.top, self.right, self.bottom,
                                          outline="red", width=2)
-            self.root.bind("<Escape>", self.on_escape)
-        else:
-            self.root = None
 
+            self.root.bind("<Escape>", self.on_escape)  # ESC to exit in visual mode
+        else:
+            self.root = None  # no GUI
+
+        # Global ESC listener (always works)
+        keyboard.add_hotkey("esc", self.on_escape)
+
+        # Worker thread
         threading.Thread(target=self.worker, daemon=True).start()
 
     def on_escape(self, event=None):
@@ -59,33 +65,23 @@ class ZoneWorker:
             if self.root:
                 self.root.destroy()
 
-    def check_esc(self):
-        if msvcrt and msvcrt.kbhit():
-            key = msvcrt.getch()
-            if key == b'\x1b':  # ESC
-                self.on_escape()
-
     def worker(self):
+        last_key_time = time.time()
         while not self.exit_flag:
-            # Go from top to bottom in steps
-            for y in range(self.top, self.bottom + 1, STEP):
-                if self.exit_flag:
-                    break
-                x = (self.left + self.right) // 2  # middle X
-                pyautogui.click(x, y)
-                print(f"Clicked at ({x}, {y})")
-                time.sleep(CLICK_DELAY)
+            # Random click position inside zone
+            x = random.randint(self.left, self.right)
+            y = random.randint(self.top, self.bottom)
+            pyautogui.click(x, y)
+            print(f"Clicked at ({x}, {y})")
 
-            if self.exit_flag:
-                break
+            # Random delay
+            time.sleep(random.uniform(CLICK_MIN, CLICK_MAX))
 
-            # At bottom → press right arrow
-            pyautogui.press("right")
-            print("Pressed Right Arrow")
-            time.sleep(0.5)  # small delay before restarting
-
-            if not self.visual:
-                self.check_esc()
+            # Press right arrow every KEY_INTERVAL sec
+            if time.time() - last_key_time >= KEY_INTERVAL:
+                pyautogui.press("right")
+                print("Pressed Right Arrow")
+                last_key_time = time.time()
 
     def run(self):
         if self.visual and self.root:
@@ -93,7 +89,6 @@ class ZoneWorker:
         else:
             while not self.exit_flag:
                 time.sleep(0.2)
-                self.check_esc()
 
 
 def main():

@@ -4,19 +4,13 @@ import pyautogui
 import tkinter as tk
 import threading
 import argparse
-import sys
-
-# Windows-only keyboard check
-try:
-    import msvcrt
-except ImportError:
-    msvcrt = None
+from pynput import keyboard   # global key listener
 
 ZONE_FILE = "zone.json"
 
 # Config
-STEP = 50        # pixels between clicks vertically
-CLICK_DELAY = 0.2  # delay between clicks (sec)
+STEP = 50         # pixels between clicks vertically
+CLICK_DELAY = 0.2 # delay between clicks (sec)
 
 
 class ZoneWorker:
@@ -50,7 +44,17 @@ class ZoneWorker:
         else:
             self.root = None
 
+        # Start worker thread
         threading.Thread(target=self.worker, daemon=True).start()
+
+        # Start global ESC listener
+        listener = keyboard.Listener(on_press=self.on_key)
+        listener.daemon = True
+        listener.start()
+
+    def on_key(self, key):
+        if key == keyboard.Key.esc:  # ESC pressed
+            self.on_escape()
 
     def on_escape(self, event=None):
         if not self.exit_flag:
@@ -59,15 +63,9 @@ class ZoneWorker:
             if self.root:
                 self.root.destroy()
 
-    def check_esc(self):
-        if msvcrt and msvcrt.kbhit():
-            key = msvcrt.getch()
-            if key == b'\x1b':  # ESC
-                self.on_escape()
-
     def worker(self):
         while not self.exit_flag:
-            # Go from top to bottom in steps
+            # From top to bottom
             for y in range(self.top, self.bottom + 1, STEP):
                 if self.exit_flag:
                     break
@@ -82,10 +80,7 @@ class ZoneWorker:
             # At bottom → press right arrow
             pyautogui.press("right")
             print("Pressed Right Arrow")
-            time.sleep(0.5)  # small delay before restarting
-
-            if not self.visual:
-                self.check_esc()
+            time.sleep(0.5)
 
     def run(self):
         if self.visual and self.root:
@@ -93,7 +88,6 @@ class ZoneWorker:
         else:
             while not self.exit_flag:
                 time.sleep(0.2)
-                self.check_esc()
 
 
 def main():
